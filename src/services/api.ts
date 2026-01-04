@@ -1,5 +1,6 @@
 import { Book, ReadingList, Review, Recommendation } from '@/types';
-import { mockBooks, mockReadingLists } from './mockData';
+import { mockBooks } from './mockData';
+import { fetchAuthSession } from 'aws-amplify/auth';
 
 /**
  * ============================================================================
@@ -41,7 +42,7 @@ import { mockBooks, mockReadingLists } from './mockData';
  */
 
 // TODO: Uncomment this after deploying API Gateway (Week 2, Day 4)
-// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 
 /**
  * TODO: Implement this function in Week 3, Day 4
@@ -56,20 +57,25 @@ import { mockBooks, mockReadingLists } from './mockData';
  *
  * See IMPLEMENTATION_GUIDE.md - Week 3, Day 5-7 for complete code.
  */
-// async function getAuthHeaders() {
-//   try {
-//     const session = await fetchAuthSession();
-//     const token = session.tokens?.idToken?.toString();
-//     return {
-//       'Authorization': `Bearer ${token}`,
-//       'Content-Type': 'application/json'
-//     };
-//   } catch {
-//     return {
-//       'Content-Type': 'application/json'
-//     };
-//   }
-// }
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const session = await fetchAuthSession();
+    const token = session.tokens?.idToken?.toString();
+    if (token) {
+      return {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
+    }
+    return {
+      'Content-Type': 'application/json',
+    };
+  } catch {
+    return {
+      'Content-Type': 'application/json',
+    };
+  }
+}
 
 /**
  * Get all books from the catalog
@@ -89,12 +95,16 @@ import { mockBooks, mockReadingLists } from './mockData';
  * Expected response: Array of Book objects from DynamoDB
  */
 export async function getBooks(): Promise<Book[]> {
-  // TODO: Remove this mock implementation after deploying Lambda
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(mockBooks), 500);
-  });
+  const response = await fetch(`${API_BASE_URL}/books`);
+  if (!response.ok) throw new Error('Failed to fetch books');
+  const data = await response.json();
+  // Lambda response format: { statusCode, body } veya direkt array
+  if (data.body) {
+    const real_data = JSON.parse(data.body);
+    return real_data.slice(1);
+  }
+  return Array.isArray(data) ? data : [];
 }
-
 /**
  * Get a single book by ID
  *
@@ -113,13 +123,15 @@ export async function getBooks(): Promise<Book[]> {
  * Expected response: Single Book object or null if not found
  */
 export async function getBook(id: string): Promise<Book | null> {
-  // TODO: Remove this mock implementation after deploying Lambda
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const book = mockBooks.find((b) => b.id === id);
-      resolve(book || null);
-    }, 300);
-  });
+  const response = await fetch(`${API_BASE_URL}/books/${id}`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('Failed to fetch book');
+  const data = await response.json();
+  // Lambda response format: { statusCode, body } veya direkt object
+  if (data.body) {
+    return JSON.parse(data.body);
+  }
+  return data;
 }
 
 /**
@@ -262,10 +274,17 @@ export async function getRecommendations(): Promise<Recommendation[]> {
  * Expected response: Array of ReadingList objects for the authenticated user
  */
 export async function getReadingLists(): Promise<ReadingList[]> {
-  // TODO: Remove this mock implementation after deploying Lambda
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(mockReadingLists), 500);
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/reading-lists`, {
+    headers,
   });
+  if (!response.ok) throw new Error('Failed to fetch reading lists');
+  const data = await response.json();
+  // Lambda response format: { statusCode, body } veya direkt array
+  if (data.body) {
+    return JSON.parse(data.body);
+  }
+  return Array.isArray(data) ? data : [];
 }
 
 /**
@@ -292,23 +311,24 @@ export async function getReadingLists(): Promise<ReadingList[]> {
  *
  * Expected response: Complete ReadingList object with generated id and timestamps
  */
+// Update createReadingList function:
 export async function createReadingList(
   list: Omit<ReadingList, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<ReadingList> {
-  // TODO: Remove this mock implementation after deploying Lambda
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const newList: ReadingList = {
-        ...list,
-        id: Date.now().toString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      resolve(newList);
-    }, 500);
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/reading-lists`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(list),
   });
+  if (!response.ok) throw new Error('Failed to create reading list');
+  const data = await response.json();
+  // Lambda response format: { statusCode, body } veya direkt object
+  if (data.body) {
+    return JSON.parse(data.body);
+  }
+  return data;
 }
-
 /**
  * Update a reading list
  * TODO: Replace with PUT /reading-lists/:id API call
@@ -317,30 +337,32 @@ export async function updateReadingList(
   id: string,
   list: Partial<ReadingList>
 ): Promise<ReadingList> {
-  // Mock implementation
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const existingList = mockReadingLists.find((l) => l.id === id);
-      const updatedList: ReadingList = {
-        ...existingList!,
-        ...list,
-        id,
-        updatedAt: new Date().toISOString(),
-      };
-      resolve(updatedList);
-    }, 500);
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/reading-lists/${id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(list),
   });
+  if (!response.ok) throw new Error('Failed to update reading list');
+  const data = await response.json();
+  // Lambda response format: { statusCode, body } veya direkt object
+  if (data.body) {
+    return JSON.parse(data.body);
+  }
+  return data;
 }
 
 /**
  * Delete a reading list
  * TODO: Replace with DELETE /reading-lists/:id API call
  */
-export async function deleteReadingList(): Promise<void> {
-  // Mock implementation
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(), 300);
+export async function deleteReadingList(id: string): Promise<void> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/reading-lists/${id}`, {
+    method: 'DELETE',
+    headers,
   });
+  if (!response.ok) throw new Error('Failed to delete reading list');
 }
 
 /**
