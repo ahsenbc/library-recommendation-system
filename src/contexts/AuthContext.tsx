@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useEffect } from 'react';
 import { User } from '@/types';
-import { signIn, signUp, signOut, getCurrentUser } from 'aws-amplify/auth';
+import { signIn, signUp, signOut, getCurrentUser, fetchUserAttributes, confirmSignUp } from 'aws-amplify/auth';
 
 /**
  * Authentication context type definition
@@ -13,6 +13,7 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   signup: (email: string, password: string, name: string) => Promise<void>;
+  confirmSignUp: (email: string, code: string) => Promise<void>;
 }
 
 /**
@@ -95,27 +96,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const checkAuth = async () => {
       try {
         const user = await getCurrentUser();
+        // Fetch user attributes to get name
+        const attributes = await fetchUserAttributes();
         setUser({
           id: user.userId,
-          email: user.signInDetails?.loginId || '',
-          name: user.username,
+          email: user.signInDetails?.loginId || attributes.email || '',
+          name: attributes.name || attributes.email?.split('@')[0] || user.username,
           role: 'user',
           createdAt: new Date().toISOString()
         });
       } catch {
+        // Cognito session yok, user null
         setUser(null);
       } finally {
         setIsLoading(false);
       }
     };
     checkAuth();
-
-    // MOCK: Check localStorage for development
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setIsLoading(false);
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -123,10 +120,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const { isSignedIn } = await signIn({ username: email, password });
       if (isSignedIn) {
         const user = await getCurrentUser();
+        // Fetch user attributes to get name
+        const attributes = await fetchUserAttributes();
         setUser({
           id: user.userId,
           email: email,
-          name: user.username,
+          name: attributes.name || email.split('@')[0],
           role: 'user',
           createdAt: new Date().toISOString(),
         });
@@ -166,6 +165,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const confirmSignUpCode = async (email: string, code: string) => {
+    try {
+      await confirmSignUp({
+        username: email,
+        confirmationCode: code,
+      });
+    } catch (error) {
+      console.error('Confirm signup error:', error);
+      throw error;
+    }
+  };
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
@@ -173,6 +184,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     login,
     logout,
     signup,
+    confirmSignUp: confirmSignUpCode,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

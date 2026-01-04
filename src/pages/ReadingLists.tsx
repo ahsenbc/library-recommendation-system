@@ -5,7 +5,7 @@ import { Modal } from '@/components/common/Modal';
 import { Input } from '@/components/common/Input';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { BookCard } from '@/components/books/BookCard';
-import { getReadingLists, createReadingList, getBook } from '@/services/api';
+import { getReadingLists, createReadingList, getBook, updateReadingList, deleteReadingList } from '@/services/api';
 import { ReadingList, Book } from '@/types';
 import { formatDate } from '@/utils/formatters';
 import { handleApiError, showSuccess } from '@/utils/errorHandling';
@@ -24,6 +24,8 @@ export function ReadingLists() {
   const [listBooks, setListBooks] = useState<Book[]>([]);
   const [isLoadingBooks, setIsLoadingBooks] = useState(false);
   const [isBooksModalOpen, setIsBooksModalOpen] = useState(false);
+  const [removingBookId, setRemovingBookId] = useState<string | null>(null);
+  const [deletingListId, setDeletingListId] = useState<string | null>(null);
 
   useEffect(() => {
     loadLists();
@@ -86,6 +88,56 @@ export function ReadingLists() {
     }
   };
 
+  const handleRemoveBook = async (bookId: string) => {
+    if (!selectedList) return;
+
+    setRemovingBookId(bookId);
+    try {
+      // Remove book from list
+      const updatedBookIds = selectedList.bookIds.filter((id) => id !== bookId);
+      const updatedList = await updateReadingList(selectedList.id, {
+        bookIds: updatedBookIds,
+      });
+
+      // Update local state
+      setSelectedList(updatedList);
+      setListBooks(listBooks.filter((book) => book.id !== bookId));
+      setLists(lists.map((l) => (l.id === selectedList.id ? updatedList : l)));
+
+      showSuccess('Book removed from reading list successfully!');
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setRemovingBookId(null);
+    }
+  };
+
+  const handleDeleteList = async (listId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent opening modal when clicking delete
+
+    if (!window.confirm('Are you sure you want to delete this reading list? This action cannot be undone.')) {
+      return;
+    }
+
+    setDeletingListId(listId);
+    try {
+      await deleteReadingList(listId);
+      // Remove from local state
+      setLists(lists.filter((l) => l.id !== listId));
+      // If deleted list was selected, close modal
+      if (selectedList?.id === listId) {
+        setIsBooksModalOpen(false);
+        setSelectedList(null);
+        setListBooks([]);
+      }
+      showSuccess('Reading list deleted successfully!');
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setDeletingListId(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -135,15 +187,57 @@ export function ReadingLists() {
             {lists.map((list) => (
               <div
                 key={list.id}
-                onClick={() => handleListClick(list)}
-                className="bg-white/90 backdrop-blur-sm rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-xl hover:border-blue-300 transition-all duration-300 cursor-pointer"
+                className="bg-white/90 backdrop-blur-sm rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-xl hover:border-blue-300 transition-all duration-300 relative group"
               >
-                <h3 className="text-xl font-bold text-slate-900 mb-2">{list.name}</h3>
-                <p className="text-slate-600 mb-4 line-clamp-2">{list.description}</p>
-                <div className="flex items-center justify-between text-sm text-slate-500">
-                  <span>{list.bookIds.length} {list.bookIds.length === 1 ? 'book' : 'books'}</span>
-                  <span>Created {formatDate(list.createdAt)}</span>
+                <div
+                  onClick={() => handleListClick(list)}
+                  className="cursor-pointer"
+                >
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">{list.name}</h3>
+                  <p className="text-slate-600 mb-4 line-clamp-2">{list.description}</p>
+                  <div className="flex items-center justify-between text-sm text-slate-500">
+                    <span>{list.bookIds.length} {list.bookIds.length === 1 ? 'book' : 'books'}</span>
+                    <span>Created {formatDate(list.createdAt)}</span>
+                  </div>
                 </div>
+
+                {/* Delete button */}
+                <button
+                  onClick={(e) => handleDeleteList(list.id, e)}
+                  disabled={deletingListId === list.id}
+                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Delete reading list"
+                >
+                  {deletingListId === list.id ? (
+                    <svg
+                      className="w-5 h-5 animate-spin"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  )}
+                </button>
               </div>
             ))}
           </div>
@@ -238,7 +332,48 @@ export function ReadingLists() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {listBooks.map((book) => (
-                  <BookCard key={book.id} book={book} />
+                  <div key={book.id} className="relative group">
+                    <BookCard book={book} />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveBook(book.id);
+                      }}
+                      disabled={removingBookId === book.id}
+                      className="absolute top-2 left-2 z-10 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Remove from list"
+                    >
+                      {removingBookId === book.id ? (
+                        <svg
+                          className="w-4 h-4 animate-spin"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                          />
+                        </svg>
+                      ) : (
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 ))}
               </div>
             )}

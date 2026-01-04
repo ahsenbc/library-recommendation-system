@@ -374,15 +374,53 @@ export async function updateReadingList(
 
 /**
  * Delete a reading list
- * TODO: Replace with DELETE /reading-lists/:id API call
+ *
+ * Lambda expects:
+ * - Path parameter: id
+ * - Authorization header with JWT token (userId extracted from token)
+ * - Returns: { success: true } on success
  */
 export async function deleteReadingList(id: string): Promise<void> {
+  if (!id) {
+    throw new Error('Reading list ID is required');
+  }
+
   const headers = await getAuthHeaders();
-  const response = await fetch(`${API_BASE_URL}/reading-lists/${id}`, {
+  const url = `${API_BASE_URL}/reading-lists/${id}`;
+
+  const response = await fetch(url, {
     method: 'DELETE',
     headers,
   });
-  if (!response.ok) throw new Error('Failed to delete reading list');
+
+  // Parse response body for error messages
+  let errorData: { error?: string } = {};
+  try {
+    const text = await response.text();
+    if (text) {
+      errorData = JSON.parse(text);
+    }
+  } catch {
+    // Response body is not JSON, ignore
+  }
+
+  if (response.status === 401) {
+    throw new Error('Unauthorized: Please login again');
+  }
+
+  if (response.status === 404) {
+    throw new Error(errorData.error || 'Reading list not found');
+  }
+
+  if (response.status === 400) {
+    throw new Error(errorData.error || 'Invalid request');
+  }
+
+  if (!response.ok) {
+    throw new Error(errorData.error || 'Failed to delete reading list');
+  }
+
+  // DELETE request successful
 }
 
 /**
