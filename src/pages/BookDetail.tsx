@@ -279,10 +279,10 @@ export function BookDetail() {
                           onClick={() => !isAddingToList && handleSelectList(list.id)}
                           disabled={isAddingToList || isBookInList}
                           className={`w-full text-left p-4 rounded-lg border transition-all ${isBookInList
-                              ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed'
-                              : isAddingToList
-                                ? 'bg-slate-50 border-slate-200 cursor-wait'
-                                : 'bg-white border-slate-200 hover:border-violet-300 hover:bg-violet-50 cursor-pointer'
+                            ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed'
+                            : isAddingToList
+                              ? 'bg-slate-50 border-slate-200 cursor-wait'
+                              : 'bg-white border-slate-200 hover:border-violet-300 hover:bg-violet-50 cursor-pointer'
                             }`}
                         >
                           <div className="flex items-start justify-between">
