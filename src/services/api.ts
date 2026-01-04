@@ -380,6 +380,14 @@ export async function updateReadingList(
  * - Authorization header with JWT token (userId extracted from token)
  * - Returns: { success: true } on success
  */
+/**
+ * Delete a reading list
+ *
+ * Lambda expects:
+ * - Path parameter: id
+ * - Authorization header with JWT token (userId extracted from token)
+ * - Returns: { success: true } on success
+ */
 export async function deleteReadingList(id: string): Promise<void> {
   if (!id) {
     throw new Error('Reading list ID is required');
@@ -398,14 +406,20 @@ export async function deleteReadingList(id: string): Promise<void> {
   try {
     const text = await response.text();
     if (text) {
-      errorData = JSON.parse(text);
+      // Lambda response format: { statusCode, body } veya direkt object
+      const parsed = JSON.parse(text);
+      if (parsed.body) {
+        errorData = JSON.parse(parsed.body);
+      } else {
+        errorData = parsed;
+      }
     }
   } catch {
     // Response body is not JSON, ignore
   }
 
   if (response.status === 401) {
-    throw new Error('Unauthorized: Please login again');
+    throw new Error(errorData.error || 'Unauthorized: Please login again');
   }
 
   if (response.status === 404) {
