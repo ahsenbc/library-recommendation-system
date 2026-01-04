@@ -6,6 +6,7 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { getBooks, createBook, deleteBook } from '@/services/api';
 import { Book } from '@/types';
 import { handleApiError, showSuccess } from '@/utils/errorHandling';
+import { useConfirmation } from '@/contexts/ConfirmationContext';
 
 /**
  * Admin page component for managing books and viewing metrics
@@ -60,7 +61,15 @@ export function Admin() {
   };
 
   const handleDeleteBook = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this book?')) {
+    const confirmed = await confirm({
+      title: 'Delete Book',
+      message: 'Are you sure you want to delete this book? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger',
+    });
+
+    if (!confirmed) {
       return;
     }
 
