@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/common/Button';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import { getBook } from '@/services/api';
-import { Book } from '@/types';
+import { Modal } from '@/components/common/Modal';
+import { getBook, getReadingLists, updateReadingList } from '@/services/api';
+import { Book, ReadingList } from '@/types';
 import { formatRating } from '@/utils/formatters';
-import { handleApiError } from '@/utils/errorHandling';
+import { handleApiError, showSuccess } from '@/utils/errorHandling';
+import { useAuth } from '@/hooks/useAuth';
 
 /**
  * BookDetail page component
@@ -13,8 +15,13 @@ import { handleApiError } from '@/utils/errorHandling';
 export function BookDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [book, setBook] = useState<Book | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isListModalOpen, setIsListModalOpen] = useState(false);
+  const [readingLists, setReadingLists] = useState<ReadingList[]>([]);
+  const [isLoadingLists, setIsLoadingLists] = useState(false);
+  const [isAddingToList, setIsAddingToList] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -39,9 +46,64 @@ export function BookDetail() {
     }
   };
 
-  // TODO: Implement add to reading list functionality
-  const handleAddToList = () => {
-    alert('Add to reading list functionality coming soon!');
+  const handleAddToList = async () => {
+    if (!isAuthenticated) {
+      alert('Please login to add books to your reading lists');
+      navigate('/login');
+      return;
+    }
+
+    if (!book) return;
+
+    setIsListModalOpen(true);
+    // Always load reading lists when modal opens (in case user created new lists)
+    await loadReadingLists();
+  };
+
+  const loadReadingLists = async () => {
+    setIsLoadingLists(true);
+    try {
+      const lists = await getReadingLists();
+      setReadingLists(lists);
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setIsLoadingLists(false);
+    }
+  };
+
+  const handleSelectList = async (listId: string) => {
+    if (!book) return;
+
+    setIsAddingToList(true);
+    try {
+      const list = readingLists.find((l) => l.id === listId);
+      if (!list) {
+        throw new Error('Reading list not found');
+      }
+
+      // Check if book is already in the list
+      if (list.bookIds.includes(book.id)) {
+        showSuccess('This book is already in this reading list!');
+        setIsListModalOpen(false);
+        return;
+      }
+
+      // Add book to the list
+      const updatedList = await updateReadingList(listId, {
+        bookIds: [...list.bookIds, book.id],
+      });
+
+      // Update local state
+      setReadingLists(readingLists.map((l) => (l.id === listId ? updatedList : l)));
+
+      showSuccess(`"${book.title}" added to "${list.name}" successfully!`);
+      setIsListModalOpen(false);
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setIsAddingToList(false);
+    }
   };
 
   if (isLoading) {
@@ -183,6 +245,85 @@ export function BookDetail() {
                   Write a Review
                 </Button>
               </div>
+
+              {/* Add to Reading List Modal */}
+              <Modal
+                isOpen={isListModalOpen}
+                onClose={() => setIsListModalOpen(false)}
+                title="Add to Reading List"
+              >
+                {isLoadingLists ? (
+                  <div className="flex justify-center items-center py-8">
+                    <LoadingSpinner size="md" />
+                  </div>
+                ) : readingLists.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-slate-600 mb-4">You don't have any reading lists yet.</p>
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        setIsListModalOpen(false);
+                        navigate('/reading-lists');
+                      }}
+                    >
+                      Create Reading List
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {readingLists.map((list) => {
+                      const isBookInList = list.bookIds.includes(book?.id || '');
+                      return (
+                        <button
+                          key={list.id}
+                          onClick={() => !isAddingToList && handleSelectList(list.id)}
+                          disabled={isAddingToList || isBookInList}
+                          className={`w-full text-left p-4 rounded-lg border transition-all ${isBookInList
+                              ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed'
+                              : isAddingToList
+                                ? 'bg-slate-50 border-slate-200 cursor-wait'
+                                : 'bg-white border-slate-200 hover:border-violet-300 hover:bg-violet-50 cursor-pointer'
+                            }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-slate-900 mb-1">{list.name}</h3>
+                              {list.description && (
+                                <p className="text-sm text-slate-600 mb-2 line-clamp-2">
+                                  {list.description}
+                                </p>
+                              )}
+                              <p className="text-xs text-slate-500">
+                                {list.bookIds.length} {list.bookIds.length === 1 ? 'book' : 'books'}
+                              </p>
+                            </div>
+                            {isBookInList && (
+                              <div className="ml-4 flex-shrink-0">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  <svg
+                                    className="w-4 h-4 mr-1"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M5 13l4 4L19 7"
+                                    />
+                                  </svg>
+                                  Added
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </Modal>
             </div>
           </div>
         </div>

@@ -41,7 +41,6 @@ import { fetchAuthSession } from 'aws-amplify/auth';
  * ============================================================================
  */
 
-// TODO: Uncomment this after deploying API Gateway (Week 2, Day 4)
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 
 /**
@@ -331,19 +330,40 @@ export async function createReadingList(
 }
 /**
  * Update a reading list
- * TODO: Replace with PUT /reading-lists/:id API call
+ *
+ * Lambda expects:
+ * - Path parameter: id
+ * - Body: { name?: string, bookIds?: string[] }
+ * - Authorization header with JWT token (userId extracted from token)
  */
 export async function updateReadingList(
   id: string,
-  list: Partial<ReadingList>
+  updates: { name?: string; bookIds?: string[] }
 ): Promise<ReadingList> {
   const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE_URL}/reading-lists/${id}`, {
     method: 'PUT',
     headers,
-    body: JSON.stringify(list),
+    body: JSON.stringify(updates),
   });
-  if (!response.ok) throw new Error('Failed to update reading list');
+
+  if (response.status === 401) {
+    throw new Error('Unauthorized: Please login again');
+  }
+
+  if (response.status === 404) {
+    throw new Error('Reading list not found');
+  }
+
+  if (response.status === 400) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Invalid request');
+  }
+
+  if (!response.ok) {
+    throw new Error('Failed to update reading list');
+  }
+
   const data = await response.json();
   // Lambda response format: { statusCode, body } veya direkt object
   if (data.body) {

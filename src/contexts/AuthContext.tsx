@@ -92,26 +92,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // TODO: Replace with Cognito session check in Week 3, Day 3-4
-    //
-    // Implementation:
-    // const checkAuth = async () => {
-    //   try {
-    //     const user = await getCurrentUser();
-    //     setUser({
-    //       id: user.userId,
-    //       email: user.signInDetails?.loginId || '',
-    //       name: user.username,
-    //       role: 'user',
-    //       createdAt: new Date().toISOString()
-    //     });
-    //   } catch {
-    //     setUser(null);
-    //   } finally {
-    //     setIsLoading(false);
-    //   }
-    // };
-    // checkAuth();
+    const checkAuth = async () => {
+      try {
+        const user = await getCurrentUser();
+        setUser({
+          id: user.userId,
+          email: user.signInDetails?.loginId || '',
+          name: user.username,
+          role: 'user',
+          createdAt: new Date().toISOString()
+        });
+      } catch {
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    checkAuth();
 
     // MOCK: Check localStorage for development
     const storedUser = localStorage.getItem('user');
