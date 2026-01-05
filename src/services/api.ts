@@ -152,27 +152,62 @@ export async function createBook(book: Omit<Book, 'id'>): Promise<Book> {
 
 /**
  * Update an existing book (admin only)
- * TODO: Replace with PUT /books/:id API call
  */
 export async function updateBook(id: string, book: Partial<Book>): Promise<Book> {
-  // Mock implementation
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const updatedBook: Book = {
-        id,
-        title: '',
-        author: '',
-        genre: '',
-        description: '',
-        coverImage: '',
-        rating: 0,
-        publishedYear: new Date().getFullYear(),
-        isbn: '',
-        ...book,
-      };
-      resolve(updatedBook);
-    }, 500);
+  if (!id) {
+    throw new Error('Book ID is required');
+  }
+
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/books/${id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(book),
   });
+
+  // Parse response body once
+  let parsedData: unknown = null;
+  let errorData: { error?: string } = {};
+  try {
+    const text = await response.text();
+    if (text) {
+      parsedData = JSON.parse(text);
+      // Lambda response format: { statusCode, body } veya direkt object
+      if (parsedData && typeof parsedData === 'object' && 'body' in parsedData) {
+        const body = (parsedData as { body: string | object }).body;
+        const parsedBody = typeof body === 'string' ? JSON.parse(body) : body;
+        errorData = parsedBody as { error?: string };
+        parsedData = parsedBody; // Success durumu için de kullan
+      } else {
+        errorData = parsedData as { error?: string };
+      }
+    }
+  } catch {
+    // Response body is not JSON, ignore
+  }
+
+  if (response.status === 401) {
+    throw new Error(errorData.error || 'Unauthorized: Please login again');
+  }
+
+  if (response.status === 403) {
+    throw new Error(errorData.error || 'Forbidden: Admin access required');
+  }
+
+  if (response.status === 400) {
+    throw new Error(errorData.error || 'Invalid request');
+  }
+
+  if (response.status === 404) {
+    throw new Error(errorData.error || 'Book not found');
+  }
+
+  if (!response.ok) {
+    throw new Error(errorData.error || 'Failed to update book');
+  }
+
+  // Success durumu: parsedData zaten parse edildi ve Book tipinde olmalı
+  return parsedData as Book;
 }
 
 /**
@@ -197,7 +232,7 @@ export async function deleteBook(id: string): Promise<void> {
       const parsed = JSON.parse(text);
       // Lambda response format: { statusCode, body } veya direkt object
       if (parsed.body) {
-        errorData = JSON.parse(parsed.body);
+        errorData = typeof parsed.body === 'string' ? JSON.parse(parsed.body) : parsed.body;
       } else {
         errorData = parsed;
       }
@@ -214,6 +249,10 @@ export async function deleteBook(id: string): Promise<void> {
     throw new Error(errorData.error || 'Forbidden: Admin access required');
   }
 
+  if (response.status === 400) {
+    throw new Error(errorData.error || 'Invalid request: Missing path param: id');
+  }
+
   if (response.status === 404) {
     throw new Error(errorData.error || 'Book not found');
   }
@@ -222,7 +261,7 @@ export async function deleteBook(id: string): Promise<void> {
     throw new Error(errorData.error || 'Failed to delete book');
   }
 
-  // DELETE request successful
+  // DELETE request successful (200 status with { success: true })
 }
 
 /**

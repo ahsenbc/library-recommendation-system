@@ -3,7 +3,7 @@ import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { Modal } from '@/components/common/Modal';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import { getBooks, createBook, deleteBook } from '@/services/api';
+import { getBooks, createBook, updateBook, deleteBook } from '@/services/api';
 import { Book } from '@/types';
 import { handleApiError, showSuccess } from '@/utils/errorHandling';
 import { useConfirmation } from '@/contexts/ConfirmationContext';
@@ -16,6 +16,8 @@ export function Admin() {
   const [books, setBooks] = useState<Book[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [newBook, setNewBook] = useState({
     title: '',
     author: '',
@@ -55,6 +57,37 @@ export function Admin() {
       setIsModalOpen(false);
       resetForm();
       showSuccess('Book added successfully!');
+    } catch (error) {
+      handleApiError(error);
+    }
+  };
+
+  const handleEditBook = (book: Book) => {
+    setEditingBook(book);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateBook = async () => {
+    if (!editingBook || !editingBook.title || !editingBook.author) {
+      alert('Please fill in required fields');
+      return;
+    }
+
+    try {
+      const updated = await updateBook(editingBook.id, {
+        title: editingBook.title,
+        author: editingBook.author,
+        genre: editingBook.genre,
+        description: editingBook.description,
+        coverImage: editingBook.coverImage,
+        rating: editingBook.rating,
+        publishedYear: editingBook.publishedYear,
+        isbn: editingBook.isbn,
+      });
+      setBooks(books.map((book) => (book.id === updated.id ? updated : book)));
+      setIsEditModalOpen(false);
+      setEditingBook(null);
+      showSuccess('Book updated successfully!');
     } catch (error) {
       handleApiError(error);
     }
@@ -158,7 +191,7 @@ export function Admin() {
                     <td className="py-3 px-4">{book.rating}</td>
                     <td className="py-3 px-4">
                       <div className="flex gap-2">
-                        <Button variant="secondary" size="sm">
+                        <Button variant="secondary" size="sm" onClick={() => handleEditBook(book)}>
                           Edit
                         </Button>
                         <Button
@@ -253,6 +286,100 @@ export function Admin() {
               </Button>
             </div>
           </div>
+        </Modal>
+
+        {/* Edit Book Modal */}
+        <Modal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setEditingBook(null);
+          }}
+          title="Edit Book"
+        >
+          {editingBook && (
+            <div className="max-h-[60vh] overflow-y-auto">
+              <Input
+                label="Title"
+                type="text"
+                value={editingBook.title}
+                onChange={(e) => setEditingBook({ ...editingBook, title: e.target.value })}
+                required
+              />
+
+              <Input
+                label="Author"
+                type="text"
+                value={editingBook.author}
+                onChange={(e) => setEditingBook({ ...editingBook, author: e.target.value })}
+                required
+              />
+
+              <Input
+                label="Genre"
+                type="text"
+                value={editingBook.genre}
+                onChange={(e) => setEditingBook({ ...editingBook, genre: e.target.value })}
+                required
+              />
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                <textarea
+                  value={editingBook.description}
+                  onChange={(e) => setEditingBook({ ...editingBook, description: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[100px] resize-none"
+                />
+              </div>
+
+              <Input
+                label="Cover Image URL"
+                type="text"
+                value={editingBook.coverImage}
+                onChange={(e) => setEditingBook({ ...editingBook, coverImage: e.target.value })}
+              />
+
+              <Input
+                label="Rating"
+                type="number"
+                min="0"
+                max="5"
+                step="0.1"
+                value={editingBook.rating}
+                onChange={(e) => setEditingBook({ ...editingBook, rating: parseFloat(e.target.value) })}
+              />
+
+              <Input
+                label="Published Year"
+                type="number"
+                value={editingBook.publishedYear}
+                onChange={(e) => setEditingBook({ ...editingBook, publishedYear: parseInt(e.target.value) })}
+              />
+
+              <Input
+                label="ISBN"
+                type="text"
+                value={editingBook.isbn}
+                onChange={(e) => setEditingBook({ ...editingBook, isbn: e.target.value })}
+              />
+
+              <div className="flex gap-3 mt-6">
+                <Button variant="primary" onClick={handleUpdateBook} className="flex-1">
+                  Update Book
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingBook(null);
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
         </Modal>
       </div>
     </div>
