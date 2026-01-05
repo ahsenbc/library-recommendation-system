@@ -14,6 +14,7 @@ export function Books() {
   const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sortBy, setSortBy] = useState('title');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     loadBooks();
@@ -24,7 +25,7 @@ export function Books() {
     try {
       const data = await getBooks();
       setBooks(data);
-      setFilteredBooks(data);
+      // filteredBooks will be updated by useEffect when books changes
     } catch (error) {
       handleApiError(error);
     } finally {
@@ -32,26 +33,50 @@ export function Books() {
     }
   };
 
-  const handleSearch = (query: string) => {
-    if (!query.trim()) {
-      setFilteredBooks(books);
-      return;
-    }
+  // Sort books based on selected criteria
+  const sortBooks = (booksToSort: Book[], sortValue: string): Book[] => {
+    const sorted = [...booksToSort];
 
-    const lowercaseQuery = query.toLowerCase();
-    const filtered = books.filter(
-      (book) =>
-        book.title.toLowerCase().includes(lowercaseQuery) ||
-        book.author.toLowerCase().includes(lowercaseQuery) ||
-        book.genre.toLowerCase().includes(lowercaseQuery)
-    );
-    setFilteredBooks(filtered);
+    switch (sortValue) {
+      case 'title':
+        return sorted.sort((a, b) => a.title.localeCompare(b.title));
+      case 'author':
+        return sorted.sort((a, b) => a.author.localeCompare(b.author));
+      case 'rating':
+        return sorted.sort((a, b) => b.rating - a.rating); // Highest first
+      case 'year':
+        return sorted.sort((a, b) => b.publishedYear - a.publishedYear); // Newest first
+      default:
+        return sorted;
+    }
   };
 
-  // TODO: Implement sort functionality
+  // Apply search and sort to books
+  useEffect(() => {
+    let result = books;
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const lowercaseQuery = searchQuery.toLowerCase();
+      result = result.filter(
+        (book) =>
+          book.title.toLowerCase().includes(lowercaseQuery) ||
+          book.author.toLowerCase().includes(lowercaseQuery) ||
+          book.genre.toLowerCase().includes(lowercaseQuery)
+      );
+    }
+
+    // Apply sorting
+    result = sortBooks(result, sortBy);
+    setFilteredBooks(result);
+  }, [books, searchQuery, sortBy]);
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+  };
+
   const handleSort = (value: string) => {
     setSortBy(value);
-    // Add sorting logic here
   };
 
   if (isLoading) {
@@ -90,7 +115,6 @@ export function Books() {
             </p>
           </div>
 
-          {/* TODO: Implement sort logic */}
           <div className="flex items-center gap-3">
             <label className="text-sm text-slate-700 font-semibold">Sort by:</label>
             <select
@@ -109,7 +133,6 @@ export function Books() {
         {/* Book Grid */}
         <BookGrid books={filteredBooks} />
 
-        {/* TODO: Implement pagination */}
         {filteredBooks.length > 12 && (
           <div className="mt-12 flex justify-center">
             <div className="glass-effect px-6 py-3 rounded-xl border border-white/20">

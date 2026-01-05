@@ -12,6 +12,7 @@ import { useConfirmation } from '@/contexts/ConfirmationContext';
  * Admin page component for managing books and viewing metrics
  */
 export function Admin() {
+  const { confirm } = useConfirmation();
   const [books, setBooks] = useState<Book[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -49,7 +50,6 @@ export function Admin() {
     }
 
     try {
-      // TODO: Replace with Lambda API call
       const created = await createBook(newBook);
       setBooks([...books, created]);
       setIsModalOpen(false);
@@ -74,8 +74,7 @@ export function Admin() {
     }
 
     try {
-      // TODO: Replace with Lambda API call
-      await deleteBook();
+      await deleteBook(id);
       setBooks(books.filter((book) => book.id !== id));
       showSuccess('Book deleted successfully!');
     } catch (error) {

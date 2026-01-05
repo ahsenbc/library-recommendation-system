@@ -328,7 +328,6 @@ export function BookDetail() {
           </div>
         </div>
 
-        {/* TODO: Implement reviews section */}
         <div className="mt-8 glass-effect rounded-3xl shadow-xl border border-white/20 p-8 md:p-12">
           <h2 className="text-3xl font-bold text-slate-900 mb-6 flex items-center">
             <span className="w-1 h-8 bg-gradient-to-b from-violet-600 to-indigo-600 rounded-full mr-3"></span>

@@ -1,5 +1,4 @@
 import { Book, ReadingList, Review, Recommendation } from '@/types';
-import { mockBooks } from './mockData';
 import { fetchAuthSession } from 'aws-amplify/auth';
 
 /**
@@ -44,17 +43,7 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 
 /**
- * TODO: Implement this function in Week 3, Day 4
- *
- * This function gets the JWT token from Cognito and adds it to API requests.
- *
- * Implementation:
- * 1. Import: import { fetchAuthSession } from 'aws-amplify/auth';
- * 2. Get session: const session = await fetchAuthSession();
- * 3. Extract token: const token = session.tokens?.idToken?.toString();
- * 4. Return headers with Authorization: Bearer {token}
- *
- * See IMPLEMENTATION_GUIDE.md - Week 3, Day 5-7 for complete code.
+ * Get the JWT token from Cognito and add it to API requests.
  */
 async function getAuthHeaders(): Promise<Record<string, string>> {
   try {
@@ -78,20 +67,6 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 
 /**
  * Get all books from the catalog
- *
- * TODO: Replace with real API call in Week 2, Day 3-4
- *
- * Implementation steps:
- * 1. Deploy Lambda function: library-get-books (see IMPLEMENTATION_GUIDE.md)
- * 2. Create API Gateway endpoint: GET /books
- * 3. Uncomment API_BASE_URL at top of file
- * 4. Replace mock code below with:
- *
- * const response = await fetch(`${API_BASE_URL}/books`);
- * if (!response.ok) throw new Error('Failed to fetch books');
- * return response.json();
- *
- * Expected response: Array of Book objects from DynamoDB
  */
 export async function getBooks(): Promise<Book[]> {
   const response = await fetch(`${API_BASE_URL}/books`);
@@ -106,20 +81,6 @@ export async function getBooks(): Promise<Book[]> {
 }
 /**
  * Get a single book by ID
- *
- * TODO: Replace with real API call in Week 2, Day 3-4
- *
- * Implementation steps:
- * 1. Deploy Lambda function: library-get-book (see IMPLEMENTATION_GUIDE.md)
- * 2. Create API Gateway endpoint: GET /books/{id}
- * 3. Replace mock code below with:
- *
- * const response = await fetch(`${API_BASE_URL}/books/${id}`);
- * if (response.status === 404) return null;
- * if (!response.ok) throw new Error('Failed to fetch book');
- * return response.json();
- *
- * Expected response: Single Book object or null if not found
  */
 export async function getBook(id: string): Promise<Book | null> {
   const response = await fetch(`${API_BASE_URL}/books/${id}`);
@@ -135,37 +96,58 @@ export async function getBook(id: string): Promise<Book | null> {
 
 /**
  * Create a new book (admin only)
- *
- * TODO: Replace with real API call in Week 2, Day 5-7
- *
- * Implementation steps:
- * 1. Deploy Lambda function: library-create-book
- * 2. Create API Gateway endpoint: POST /books
- * 3. Add Cognito authorizer (Week 3)
- * 4. Replace mock code below with:
- *
- * const headers = await getAuthHeaders();
- * const response = await fetch(`${API_BASE_URL}/books`, {
- *   method: 'POST',
- *   headers,
- *   body: JSON.stringify(book)
- * });
- * if (!response.ok) throw new Error('Failed to create book');
- * return response.json();
- *
- * Note: This endpoint requires admin role in Cognito
  */
 export async function createBook(book: Omit<Book, 'id'>): Promise<Book> {
-  // TODO: Remove this mock implementation after deploying Lambda
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const newBook: Book = {
-        ...book,
-        id: Date.now().toString(),
-      };
-      resolve(newBook);
-    }, 500);
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/books`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(book),
   });
+
+  // Parse response body once
+  let parsedData: unknown = null;
+  let errorData: { error?: string } = {};
+  try {
+    const text = await response.text();
+    if (text) {
+      parsedData = JSON.parse(text);
+      // Lambda response format: { statusCode, body } veya direkt object
+      if (parsedData && typeof parsedData === 'object' && 'body' in parsedData) {
+        const body = (parsedData as { body: string | object }).body;
+        const parsedBody = typeof body === 'string' ? JSON.parse(body) : body;
+        errorData = parsedBody as { error?: string };
+        parsedData = parsedBody; // Success durumu için de kullan
+      } else {
+        errorData = parsedData as { error?: string };
+      }
+    }
+  } catch {
+    // Response body is not JSON, ignore
+  }
+
+  if (response.status === 401) {
+    throw new Error(errorData.error || 'Unauthorized: Please login again');
+  }
+
+  if (response.status === 403) {
+    throw new Error(errorData.error || 'Forbidden: Admin access required');
+  }
+
+  if (response.status === 400) {
+    throw new Error(errorData.error || 'Invalid request: Missing required fields');
+  }
+
+  if (response.status === 409) {
+    throw new Error(errorData.error || 'Book with this id already exists');
+  }
+
+  if (!response.ok) {
+    throw new Error(errorData.error || 'Failed to create book');
+  }
+
+  // Success durumu: parsedData zaten parse edildi ve Book tipinde olmalı
+  return parsedData as Book;
 }
 
 /**
@@ -176,11 +158,17 @@ export async function updateBook(id: string, book: Partial<Book>): Promise<Book>
   // Mock implementation
   return new Promise((resolve) => {
     setTimeout(() => {
-      const existingBook = mockBooks.find((b) => b.id === id);
       const updatedBook: Book = {
-        ...existingBook!,
-        ...book,
         id,
+        title: '',
+        author: '',
+        genre: '',
+        description: '',
+        coverImage: '',
+        rating: 0,
+        publishedYear: new Date().getFullYear(),
+        isbn: '',
+        ...book,
       };
       resolve(updatedBook);
     }, 500);
@@ -189,88 +177,73 @@ export async function updateBook(id: string, book: Partial<Book>): Promise<Book>
 
 /**
  * Delete a book (admin only)
- * TODO: Replace with DELETE /books/:id API call
  */
-export async function deleteBook(): Promise<void> {
-  // Mock implementation
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(), 300);
+export async function deleteBook(id: string): Promise<void> {
+  if (!id) {
+    throw new Error('Book ID is required');
+  }
+
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/books/${id}`, {
+    method: 'DELETE',
+    headers,
   });
+
+  // Parse response body for error messages
+  let errorData: { error?: string } = {};
+  try {
+    const text = await response.text();
+    if (text) {
+      const parsed = JSON.parse(text);
+      // Lambda response format: { statusCode, body } veya direkt object
+      if (parsed.body) {
+        errorData = JSON.parse(parsed.body);
+      } else {
+        errorData = parsed;
+      }
+    }
+  } catch {
+    // Response body is not JSON, ignore
+  }
+
+  if (response.status === 401) {
+    throw new Error(errorData.error || 'Unauthorized: Please login again');
+  }
+
+  if (response.status === 403) {
+    throw new Error(errorData.error || 'Forbidden: Admin access required');
+  }
+
+  if (response.status === 404) {
+    throw new Error(errorData.error || 'Book not found');
+  }
+
+  if (!response.ok) {
+    throw new Error(errorData.error || 'Failed to delete book');
+  }
+
+  // DELETE request successful
 }
 
 /**
  * Get AI-powered book recommendations using Amazon Bedrock
- *
- * TODO: Replace with real API call in Week 4, Day 1-2
- *
- * Implementation steps:
- * 1. Enable Bedrock model access in AWS Console (Claude 3 Haiku recommended)
- * 2. Deploy Lambda function: library-get-recommendations (see IMPLEMENTATION_GUIDE.md)
- * 3. Create API Gateway endpoint: POST /recommendations
- * 4. Add Cognito authorizer
- * 5. Update function signature to accept query parameter:
- *    export async function getRecommendations(query: string): Promise<Recommendation[]>
- * 6. Replace mock code below with:
- *
- * const headers = await getAuthHeaders();
- * const response = await fetch(`${API_BASE_URL}/recommendations`, {
- *   method: 'POST',
- *   headers,
- *   body: JSON.stringify({ query })
- * });
- * if (!response.ok) throw new Error('Failed to get recommendations');
- * const data = await response.json();
- * return data.recommendations;
- *
- * Expected response: Array of recommendations with title, author, reason, confidence
- *
- * Documentation: https://docs.aws.amazon.com/bedrock/latest/userguide/
  */
-export async function getRecommendations(): Promise<Recommendation[]> {
-  // TODO: Remove this mock implementation after deploying Bedrock Lambda
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const mockRecommendations: Recommendation[] = [
-        {
-          id: '1',
-          bookId: '1',
-          reason:
-            'Based on your interest in philosophical fiction, this book explores themes of choice and regret.',
-          confidence: 0.92,
-        },
-        {
-          id: '2',
-          bookId: '2',
-          reason:
-            'If you enjoy science-based thrillers, this space adventure combines humor with hard science.',
-          confidence: 0.88,
-        },
-      ];
-      resolve(mockRecommendations);
-    }, 1000);
+export async function getRecommendations(query: string): Promise<Recommendation[]> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/recommendations`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ query }),
   });
+  if (!response.ok) throw new Error('Failed to get recommendations');
+  const data = await response.json();
+  console.log(data);
+  // API returns array directly or wrapped in recommendations property
+  return Array.isArray(data) ? data : (data.recommendations || []);
 }
 
 /**
  * Get user's reading lists
- *
- * TODO: Replace with real API call in Week 2, Day 5-7
- *
- * Implementation steps:
- * 1. Deploy Lambda function: library-get-reading-lists
- * 2. Lambda should query DynamoDB by userId (from Cognito token)
- * 3. Create API Gateway endpoint: GET /reading-lists
- * 4. Add Cognito authorizer (Week 3)
- * 5. Replace mock code below with:
- *
- * const headers = await getAuthHeaders();
- * const response = await fetch(`${API_BASE_URL}/reading-lists`, {
- *   headers
- * });
- * if (!response.ok) throw new Error('Failed to fetch reading lists');
- * return response.json();
- *
- * Expected response: Array of ReadingList objects for the authenticated user
  */
 export async function getReadingLists(): Promise<ReadingList[]> {
   const headers = await getAuthHeaders();
@@ -288,29 +261,7 @@ export async function getReadingLists(): Promise<ReadingList[]> {
 
 /**
  * Create a new reading list
- *
- * TODO: Replace with real API call in Week 2, Day 5-7
- *
- * Implementation steps:
- * 1. Deploy Lambda function: library-create-reading-list
- * 2. Lambda should generate UUID for id and timestamps
- * 3. Lambda should get userId from Cognito token
- * 4. Create API Gateway endpoint: POST /reading-lists
- * 5. Add Cognito authorizer (Week 3)
- * 6. Replace mock code below with:
- *
- * const headers = await getAuthHeaders();
- * const response = await fetch(`${API_BASE_URL}/reading-lists`, {
- *   method: 'POST',
- *   headers,
- *   body: JSON.stringify(list)
- * });
- * if (!response.ok) throw new Error('Failed to create reading list');
- * return response.json();
- *
- * Expected response: Complete ReadingList object with generated id and timestamps
  */
-// Update createReadingList function:
 export async function createReadingList(
   list: Omit<ReadingList, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<ReadingList> {

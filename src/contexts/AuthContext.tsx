@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useEffect } from 'react';
 import { User } from '@/types';
-import { signIn, signUp, signOut, getCurrentUser, fetchUserAttributes, confirmSignUp } from 'aws-amplify/auth';
+import { signIn, signUp, signOut, getCurrentUser, fetchUserAttributes, confirmSignUp, fetchAuthSession } from 'aws-amplify/auth';
 
 /**
  * Authentication context type definition
@@ -92,17 +92,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Helper function to check if user is admin from Cognito groups
+  const getUserRole = async (): Promise<'user' | 'admin'> => {
+    try {
+      const session = await fetchAuthSession();
+      const token = session.tokens?.idToken;
+      if (token) {
+        // Decode JWT token to get groups
+        const payload = JSON.parse(atob(token.toString().split('.')[1]));
+        const groups = payload['cognito:groups'];
+        if (groups) {
+          if (Array.isArray(groups) && groups.includes('Admins')) {
+            return 'admin';
+          }
+          if (typeof groups === 'string' && groups.split(',').map(s => s.trim()).includes('Admins')) {
+            return 'admin';
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking user role:', error);
+    }
+    return 'user';
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const user = await getCurrentUser();
         // Fetch user attributes to get name
         const attributes = await fetchUserAttributes();
+        // Check if user is admin from Cognito groups
+        const role = await getUserRole();
         setUser({
           id: user.userId,
           email: user.signInDetails?.loginId || attributes.email || '',
           name: attributes.name || attributes.email?.split('@')[0] || user.username,
-          role: 'user',
+          role,
           createdAt: new Date().toISOString()
         });
       } catch {
@@ -122,11 +148,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const user = await getCurrentUser();
         // Fetch user attributes to get name
         const attributes = await fetchUserAttributes();
+        // Check if user is admin from Cognito groups
+        const role = await getUserRole();
         setUser({
           id: user.userId,
           email: email,
           name: attributes.name || email.split('@')[0],
-          role: 'user',
+          role,
           createdAt: new Date().toISOString(),
         });
       }
@@ -136,7 +164,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  // Replace TODO in logout function:
   const logout = async () => {
     try {
       await signOut();
@@ -146,7 +173,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  // Replace TODO in signup function:
   const signup = async (email: string, password: string, name: string) => {
     try {
       await signUp({
