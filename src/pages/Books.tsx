@@ -15,6 +15,11 @@ export function Books() {
   const [isLoading, setIsLoading] = useState(true);
   const [sortBy, setSortBy] = useState('title');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<{ genre: string; rating: string; year: string }>({
+    genre: '',
+    rating: '',
+    year: '',
+  });
 
   useEffect(() => {
     loadBooks();
@@ -51,7 +56,7 @@ export function Books() {
     }
   };
 
-  // Apply search and sort to books
+  // Apply search, filters and sort to books
   useEffect(() => {
     let result = books;
 
@@ -66,10 +71,27 @@ export function Books() {
       );
     }
 
+    // Apply genre filter
+    if (filters.genre) {
+      result = result.filter((book) => book.genre.toLowerCase() === filters.genre.toLowerCase());
+    }
+
+    // Apply rating filter
+    if (filters.rating) {
+      const minRating = parseFloat(filters.rating);
+      result = result.filter((book) => book.rating >= minRating);
+    }
+
+    // Apply year filter
+    if (filters.year) {
+      const yearNum = parseInt(filters.year, 10);
+      result = result.filter((book) => book.publishedYear === yearNum);
+    }
+
     // Apply sorting
     result = sortBooks(result, sortBy);
     setFilteredBooks(result);
-  }, [books, searchQuery, sortBy]);
+  }, [books, searchQuery, sortBy, filters]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -77,6 +99,10 @@ export function Books() {
 
   const handleSort = (value: string) => {
     setSortBy(value);
+  };
+
+  const handleFilterChange = (newFilters: { genre: string; rating: string; year: string }) => {
+    setFilters(newFilters);
   };
 
   if (isLoading) {
@@ -103,7 +129,7 @@ export function Books() {
 
         {/* Search */}
         <div className="mb-8">
-          <BookSearch onSearch={handleSearch} />
+          <BookSearch onSearch={handleSearch} onFilterChange={handleFilterChange} />
         </div>
 
         {/* Filters & Sort */}

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 /**
  * BookSearch component props
  */
 interface BookSearchProps {
   onSearch: (query: string) => void;
+  onFilterChange?: (filters: { genre: string; rating: string; year: string }) => void;
 }
 
 /**
@@ -13,13 +14,22 @@ interface BookSearchProps {
  * @example
  * <BookSearch onSearch={handleSearch} />
  */
-export function BookSearch({ onSearch }: BookSearchProps) {
+export function BookSearch({ onSearch, onFilterChange }: BookSearchProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [genre, setGenre] = useState('');
+  const [rating, setRating] = useState('');
+  const [year, setYear] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSearch(searchQuery);
   };
+
+  useEffect(() => {
+    if (onFilterChange) {
+      onFilterChange({ genre, rating, year });
+    }
+  }, [genre, rating, year, onFilterChange]);
 
   return (
     <div className="glass-effect rounded-2xl p-6 border border-white/20 shadow-xl">
@@ -72,7 +82,11 @@ export function BookSearch({ onSearch }: BookSearchProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">Genre</label>
-            <select className="input-modern">
+            <select 
+              className="input-modern"
+              value={genre}
+              onChange={(e) => setGenre(e.target.value)}
+            >
               <option value="">All Genres</option>
               <option value="fiction">Fiction</option>
               <option value="sci-fi">Science Fiction</option>
@@ -84,7 +98,11 @@ export function BookSearch({ onSearch }: BookSearchProps) {
 
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">Rating</label>
-            <select className="input-modern">
+            <select 
+              className="input-modern"
+              value={rating}
+              onChange={(e) => setRating(e.target.value)}
+            >
               <option value="">All Ratings</option>
               <option value="4.5">4.5+ Stars</option>
               <option value="4.0">4.0+ Stars</option>
@@ -94,7 +112,11 @@ export function BookSearch({ onSearch }: BookSearchProps) {
 
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">Year</label>
-            <select className="input-modern">
+            <select 
+              className="input-modern"
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+            >
               <option value="">All Years</option>
               <option value="2024">2024</option>
               <option value="2023">2023</option>
