@@ -680,6 +680,7 @@ By completing this project, students will:
 ## 🤝 Contributing
 
 This is a student project for CENG413 Software Quality Standards course. Follow the project guidelines and coding standards defined in `.kiro/steering/` files.
+Feature: recommendation logic added by Asiye
 
 ## 📄 License
 
