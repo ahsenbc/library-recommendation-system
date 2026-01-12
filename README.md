@@ -692,3 +692,5 @@ This project is part of an academic course at Istanbul Okan University.
 **Project Type**: 4-week intensive, beginner-friendly, AWS serverless  
 **Status**: Frontend complete ✅ | Backend implementation guides ready ✅  
 **Next Step**: [QUICK_START.md](./QUICK_START.md) 🚀
+## Contribution
+Added initial contribution note by Betül. 
